@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GoTracka Rider — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+
+<!-- ── Nav ── -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-brand">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+        <rect width="32" height="32" rx="9" fill="#3B82F6"/>
+        <path d="M16 24C16 24 8.5 18.5 8.5 13C8.5 9.13 11.91 6 16 6C20.09 6 23.5 9.13 23.5 13C23.5 18.5 16 24 16 24Z" fill="white" opacity="0.95"/>
+        <circle cx="16" cy="13" r="4.5" fill="#3B82F6"/>
+        <path d="M14 13L16 11L18 13" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="16" y1="11" x2="16" y2="15" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="24" cy="8" r="4" fill="#A3FF57"/>
+        <text x="24" y="11" text-anchor="middle" font-size="5" fill="#060D1A" font-weight="800" font-family="sans-serif">Go</text>
+      </svg>
+      <span class="nav-brand-name">Go<span class="accent">Tracka</span></span>
+    </a>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="rider-badge">Rider</span>
+      <button id="signOutBtn" class="btn btn-glass btn-sm">Sign Out</button>
+    </div>
+  </div>
+</nav>
+
+<div style="padding:36px 0 80px">
+  <div class="wrap-sm">
+
+    <!-- Rider Profile Card -->
+    <div class="glass profile-card anim-fade-up" style="margin-bottom:24px">
+      <div class="profile-avatar" id="profileAvatar">R</div>
+      <div>
+        <div class="profile-name" id="profileName">Your Account</div>
+        <div class="profile-rating">★★★★★ 4.9</div>
+        <div class="profile-stats">
+          <div>
+            <div class="profile-stat-num" id="statCompleted">0</div>
+            <div class="profile-stat-label">Completed</div>
+          </div>
+          <div>
+            <div class="profile-stat-num" id="statToday">0</div>
+            <div class="profile-stat-label">Today</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Online/Offline Toggle -->
+    <div class="online-toggle" id="onlineToggle">
+      <div class="toggle-dot"></div>
+      <div>
+        <div class="toggle-label" id="toggleLabel">You're Offline</div>
+        <div class="toggle-sub" id="toggleSub">Tap to go online and accept deliveries</div>
+      </div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="stat-grid anim-fade-up" style="animation-delay:0.1s">
+      <div class="glass stat-card">
+        <div class="stat-num" style="color:var(--success)" id="dashCompleted">0</div>
+        <div class="stat-label">Completed</div>
+      </div>
+      <div class="glass stat-card">
+        <div class="stat-num" style="color:var(--blue-light)" id="dashPending">0</div>
+        <div class="stat-label">Active</div>
+      </div>
+      <div class="glass stat-card">
+        <div class="stat-num" style="color:var(--lime)" id="dashRating">4.9</div>
+        <div class="stat-label">Rating</div>
+      </div>
+    </div>
+
+    <!-- Active Delivery (if any) -->
+    <div id="activeDeliverySection" class="hidden anim-fade-up" style="animation-delay:0.2s">
+      <p class="eyebrow" style="margin-bottom:12px">Active Delivery</p>
+      <div class="glass active-delivery" id="activeDeliveryCard">
+        <div class="active-delivery-header">
+          <span class="active-delivery-code" id="activeDashCode">------</span>
+          <span id="activeDashStatus" class="rider-badge">In Transit</span>
+        </div>
+        <div class="delivery-field">
+          <span class="delivery-field-label">Package</span>
+          <span class="delivery-field-value" id="activeDashPkg">—</span>
+        </div>
+        <div class="delivery-field">
+          <span class="delivery-field-label">Recipient</span>
+          <span class="delivery-field-value" id="activeDashBuyer">—</span>
+        </div>
+        <div class="delivery-field">
+          <span class="delivery-field-label">Address</span>
+          <span class="delivery-field-value" id="activeDashAddr">—</span>
+        </div>
+        <a id="goToDeliverBtn" href="deliver.html" class="btn btn-lime btn-block" style="margin-top:16px">
+          Open Delivery Map →
+        </a>
+      </div>
+    </div>
+
+    <!-- No active delivery -->
+    <div id="noDeliverySection" class="anim-fade-up" style="animation-delay:0.2s">
+      <div style="text-align:center;padding:48px 0">
+        <div style="font-size:3rem;animation:float 3.5s ease-in-out infinite">🏍️</div>
+        <h3 style="font-size:1.1rem;margin-top:14px;font-family:var(--font-display);font-weight:700">No active delivery.</h3>
+        <p style="color:var(--text-2);font-size:0.9rem;margin-top:8px">Accept a delivery code from a seller to get started.</p>
+        <a href="index.html" class="btn btn-primary" style="margin-top:24px">Accept a Delivery</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <span class="footer-note">GoTracka v2.0 Rider App</span>
+  </div>
+</footer>
+
+<script type="module">
+import { db, auth } from "./firebase-config.js";
+import { doc, getDoc, onSnapshot, query, where, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+const code    = sessionStorage.getItem('gotracka.riderCode');
+const riderPhone = sessionStorage.getItem('gotracka.riderPhone') || '';
+
+// Auth guard
+onAuthStateChanged(auth, user => {
+  if (!user) { window.location.replace('index.html'); }
+});
+
+// Profile
+const initial = riderPhone.slice(-2) || 'R';
+document.getElementById('profileAvatar').textContent = initial;
+document.getElementById('profileName').textContent = riderPhone || 'Rider';
+
+// Online toggle
+let isOnline = false;
+const toggle = document.getElementById('onlineToggle');
+toggle.addEventListener('click', () => {
+  isOnline = !isOnline;
+  toggle.classList.toggle('is-online', isOnline);
+  document.getElementById('toggleLabel').textContent = isOnline ? "You're Online" : "You're Offline";
+  document.getElementById('toggleSub').textContent   = isOnline
+    ? "Accepting new deliveries"
+    : "Tap to go online and accept deliveries";
+});
+
+// Load active delivery
+async function loadActiveDelivery() {
+  if (!code) {
+    document.getElementById('activeDeliverySection').classList.add('hidden');
+    document.getElementById('noDeliverySection').classList.remove('hidden');
+    return;
+  }
+  const snap = await getDoc(doc(db, 'deliveries', code));
+  if (!snap.exists()) {
+    document.getElementById('activeDeliverySection').classList.add('hidden');
+    document.getElementById('noDeliverySection').classList.remove('hidden');
+    return;
+  }
+  const d = snap.data();
+  document.getElementById('activeDeliverySection').classList.remove('hidden');
+  document.getElementById('noDeliverySection').classList.add('hidden');
+  document.getElementById('activeDashCode').textContent = code;
+  document.getElementById('activeDashPkg').textContent  = d.packageNote  || '—';
+  document.getElementById('activeDashBuyer').textContent= d.buyerName     || '—';
+  const addr = d.buyerAddress ? [d.buyerAddress.street, d.buyerAddress.city, d.buyerAddress.state].filter(Boolean).join(', ') : 'Not provided';
+  document.getElementById('activeDashAddr').textContent = addr;
+}
+
+loadActiveDelivery();
+
+// Fake stats from session
+const completed = parseInt(sessionStorage.getItem('gotracka.completed') || '0');
+document.getElementById('dashCompleted').textContent = completed;
+document.getElementById('statCompleted').textContent = completed;
+document.getElementById('dashPending').textContent   = code ? '1' : '0';
+
+// Sign out
+document.getElementById('signOutBtn').addEventListener('click', async () => {
+  await signOut(auth);
+  sessionStorage.clear();
+  window.location.replace('index.html');
+});
+</script>
+</body>
+</html>

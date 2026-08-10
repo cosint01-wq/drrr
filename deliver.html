@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GoTracka Rider — Active Delivery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="styles.css"/>
+  <style>
+    /* ── Full-height map layout ── */
+    body { overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+    .deliver-page { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+
+    /* ── Map fills most of the screen ── */
+    #riderMap { width: 100%; height: 100%; }
+    .map-full  { flex: 1; position: relative; z-index: 1; }
+
+    /* ── Floating header pill ── */
+    .top-pill {
+      position: absolute;
+      top: 16px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      background: rgba(6,13,26,0.92);
+      border: 1px solid rgba(255,255,255,0.12);
+      backdrop-filter: blur(20px);
+      border-radius: 999px;
+      padding: 8px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      white-space: nowrap;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .top-pill-code {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 0.95rem;
+      letter-spacing: 0.06em;
+      color: var(--blue-light);
+    }
+    .top-pill-status {
+      font-family: var(--font-display);
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--text-2);
+    }
+    .top-pill-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse-dot 1.8s infinite;
+    }
+
+    /* ── Floating back button ── */
+    .back-fab {
+      position: absolute;
+      top: 16px; left: 16px;
+      z-index: 20;
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      background: rgba(6,13,26,0.92);
+      border: 1px solid rgba(255,255,255,0.12);
+      backdrop-filter: blur(16px);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      color: var(--text);
+      cursor: pointer;
+      text-decoration: none;
+      transition: background var(--t-fast);
+    }
+    .back-fab:hover { background: rgba(30,50,80,0.95); }
+
+    /* ── Bottom action sheet ── */
+    .action-sheet {
+      position: relative;
+      z-index: 10;
+      background: rgba(6,13,26,0.97);
+      border-top: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(24px);
+      padding: 20px 20px 28px;
+      max-height: 56vh;
+      overflow-y: auto;
+    }
+
+    /* ── Delivery info row ── */
+    .info-row {
+      display: flex; gap: 20px; margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+    .info-field { flex: 1; min-width: 120px; }
+    .info-lbl {
+      font-family: var(--font-display);
+      font-size: 0.65rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-3); display: block; margin-bottom: 2px;
+    }
+    .info-val { font-weight: 600; font-size: 0.9rem; }
+
+    /* ── Stage indicator ── */
+    .stage-row {
+      display: flex; gap: 6px; margin-bottom: 18px;
+      align-items: center; overflow-x: auto; padding-bottom: 4px;
+    }
+    .stage-pip {
+      display: flex; align-items: center; gap: 6px;
+      flex-shrink: 0;
+    }
+    .stage-bubble {
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-family: var(--font-display);
+      font-size: 0.72rem; font-weight: 700;
+      border: 1px solid transparent;
+      transition: all var(--t);
+    }
+    .stage-bubble.done    { background: var(--success-dim); border-color: rgba(34,197,94,0.25); color: var(--success); }
+    .stage-bubble.active  { background: var(--blue-dim); border-color: rgba(59,130,246,0.4); color: var(--blue-light); }
+    .stage-bubble.pending { background: transparent; border-color: var(--glass-border); color: var(--text-3); }
+    .stage-arrow { color: var(--text-3); font-size: 0.75rem; }
+
+    /* ── Primary action button ── */
+    .primary-action {
+      width: 100%; padding: 20px;
+      border-radius: var(--r-xl);
+      font-family: var(--font-display);
+      font-size: 1.05rem; font-weight: 800;
+      border: none; cursor: pointer;
+      transition: all var(--t-fast);
+      margin-bottom: 10px;
+      position: relative; overflow: hidden;
+    }
+    .primary-action::after {
+      content: ''; position: absolute; inset: 0;
+      background: rgba(255,255,255,0.1);
+      opacity: 0; transition: opacity var(--t-fast);
+    }
+    .primary-action:hover::after { opacity: 1; }
+    .primary-action:active { transform: scale(0.98); }
+    .primary-action.collect  { background: var(--blue); color: #fff; box-shadow: 0 6px 24px var(--blue-glow); }
+    .primary-action.arrive   { background: var(--warning); color: #000; box-shadow: 0 6px 24px rgba(245,158,11,0.3); }
+    .primary-action.deliver  { background: var(--lime); color: var(--bg); box-shadow: 0 6px 24px var(--lime-glow); }
+    .primary-action.ended    { background: var(--success); color: #fff; box-shadow: 0 6px 24px var(--success-dim); }
+    .primary-action:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* ── Secondary actions grid ── */
+    .secondary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    /* ── Message chips ── */
+    .msg-section-label {
+      font-family: var(--font-display);
+      font-size: 0.65rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-3); margin-bottom: 8px;
+    }
+    .msg-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .msg-chip {
+      padding: 7px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--glass-border);
+      background: transparent;
+      color: var(--text-2);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all var(--t-fast);
+    }
+    .msg-chip:hover {
+      border-color: var(--blue);
+      color: var(--blue-light);
+      background: var(--blue-dim);
+    }
+    .msg-chip.sent {
+      border-color: rgba(34,197,94,0.35);
+      color: var(--success);
+      background: var(--success-dim);
+    }
+
+    /* ── Leaflet popup dark ── */
+    .leaflet-popup-content-wrapper {
+      background: #0D1F38; color: #EEF4FF;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .leaflet-popup-tip { background: #0D1F38; }
+
+    /* ── GPS status ── */
+    .gps-bar {
+      position: absolute;
+      bottom: calc(56vh + 8px);
+      left: 50%; transform: translateX(-50%);
+      z-index: 15;
+      background: rgba(6,13,26,0.88);
+      border: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(14px);
+      border-radius: 999px;
+      padding: 6px 16px;
+      font-family: var(--font-display);
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--text-2);
+      display: flex; align-items: center; gap: 6px;
+      white-space: nowrap;
+    }
+    .gps-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); animation: pulse-dot 1.8s infinite; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      top: 80px; left: 50%; transform: translateX(-50%) translateY(-20px);
+      background: rgba(6,13,26,0.96);
+      border: 1px solid rgba(255,255,255,0.12);
+      backdrop-filter: blur(16px);
+      border-radius: 999px;
+      padding: 10px 22px;
+      font-family: var(--font-display);
+      font-size: 0.85rem; font-weight: 600;
+      color: var(--text);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      z-index: 100;
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.22,1,0.36,1);
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    @media(max-width: 480px) {
+      .action-sheet { max-height: 60vh; }
+      .secondary-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="deliver-page">
+
+  <!-- ── Map ── -->
+  <div class="map-full">
+    <div id="riderMap"></div>
+
+    <!-- Back button -->
+    <a href="dashboard.html" class="back-fab" title="Back to dashboard">←</a>
+
+    <!-- Top pill -->
+    <div class="top-pill">
+      <div class="top-pill-dot"></div>
+      <span class="top-pill-code" id="pillCode">------</span>
+      <span class="top-pill-status" id="pillStatus">Accepting…</span>
+    </div>
+
+    <!-- GPS bar -->
+    <div class="gps-bar" id="gpsBar">
+      <div class="gps-dot"></div>
+      <span id="gpsLabel">Acquiring GPS…</span>
+    </div>
+  </div>
+
+  <!-- ── Action Sheet ── -->
+  <div class="action-sheet">
+
+    <!-- Delivery info -->
+    <div class="info-row" id="deliveryInfoRow">
+      <div class="info-field">
+        <span class="info-lbl">Package</span>
+        <span class="info-val" id="infoPkg">—</span>
+      </div>
+      <div class="info-field">
+        <span class="info-lbl">Recipient</span>
+        <span class="info-val" id="infoBuyer">—</span>
+      </div>
+      <div class="info-field" style="flex-basis:100%">
+        <span class="info-lbl">Delivery Address</span>
+        <span class="info-val" id="infoAddr">—</span>
+      </div>
+    </div>
+
+    <!-- Stage indicator -->
+    <div class="stage-row" id="stageRow">
+      <div class="stage-pip">
+        <span class="stage-bubble pending" id="stage-collect">📦 Collect</span>
+      </div>
+      <span class="stage-arrow">›</span>
+      <div class="stage-pip">
+        <span class="stage-bubble pending" id="stage-transit">🚀 Transit</span>
+      </div>
+      <span class="stage-arrow">›</span>
+      <div class="stage-pip">
+        <span class="stage-bubble pending" id="stage-nearby">📍 Nearby</span>
+      </div>
+      <span class="stage-arrow">›</span>
+      <div class="stage-pip">
+        <span class="stage-bubble pending" id="stage-delivered">🏡 Delivered</span>
+      </div>
+    </div>
+
+    <!-- Primary action -->
+    <button id="primaryBtn" class="primary-action collect" disabled>
+      Loading delivery…
+    </button>
+
+    <!-- Secondary -->
+    <div class="secondary-grid" id="secondaryGrid">
+      <button id="btn-cant-deliver" class="btn btn-glass btn-sm" style="border-radius:var(--r)">
+        ⚠️ Unable to Deliver
+      </button>
+      <button id="btn-nav" class="btn btn-glass btn-sm" style="border-radius:var(--r)">
+        🗺️ Open in Maps
+      </button>
+    </div>
+
+    <!-- Predefined messages -->
+    <div id="messagesSection" class="mt-8">
+      <p class="msg-section-label">Quick Messages to Customer</p>
+      <div class="msg-chips">
+        <button class="msg-chip" data-msg="I'm on my way to collect the package.">🏍️ On my way to collect</button>
+        <button class="msg-chip" data-msg="I've collected the package. Heading to you now!">✅ Package collected</button>
+        <button class="msg-chip" data-msg="I'm arriving shortly — please be available.">📍 Arriving shortly</button>
+        <button class="msg-chip" data-msg="I'm nearby! Please come out or be available.">🔔 I'm nearby</button>
+        <button class="msg-chip" data-msg="There's heavy traffic ahead — I'll be a few minutes late. Thank you for your patience.">⚡ Slight traffic delay</button>
+        <button class="msg-chip" data-msg="Package delivered successfully! Thank you.">🎉 Delivered!</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module" src="rider.js"></script>
+</body>
+</html>

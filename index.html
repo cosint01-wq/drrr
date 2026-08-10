@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GoTracka Rider — Sign In</title>
+  <meta name="description" content="Sign in as a GoTracka dispatch rider to start accepting deliveries."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+
+<div class="login-page">
+  <div class="login-glow login-glow-1"></div>
+  <div class="login-glow login-glow-2"></div>
+
+  <div class="login-card glass anim-fade-up">
+
+    <!-- Logo -->
+    <div class="login-logo">
+      <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+        <rect width="56" height="56" rx="16" fill="#3B82F6"/>
+        <path d="M28 44C28 44 13 34 13 23C13 15 19.82 9 28 9C36.18 9 43 15 43 23C43 34 28 44 28 44Z" fill="white" opacity="0.95"/>
+        <circle cx="28" cy="23" r="8" fill="#3B82F6"/>
+        <path d="M24 23L28 19L32 23" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="28" y1="19" x2="28" y2="27" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="44" cy="12" r="7" fill="#A3FF57"/>
+        <text x="44" y="16" text-anchor="middle" font-size="8" fill="#060D1A" font-weight="800" font-family="sans-serif">Go</text>
+      </svg>
+      <div>
+        <div class="login-logo-name">Go<span class="accent">Tracka</span></div>
+        <div style="text-align:center"><span class="rider-badge">Rider App</span></div>
+      </div>
+    </div>
+
+    <!-- Step dots -->
+    <div class="step-track">
+      <div class="step-dot active" id="dot0"></div>
+      <div class="step-dot" id="dot1"></div>
+      <div class="step-dot" id="dot2"></div>
+    </div>
+
+    <!-- Step 1: Enter code -->
+    <div id="stepCode" style="text-align:center">
+      <p class="eyebrow" style="margin-bottom:8px">Step 1 of 2</p>
+      <h1 style="font-size:1.5rem;margin-bottom:6px">Enter your delivery code</h1>
+      <p style="color:var(--text-2);font-size:0.9rem;margin-bottom:24px">The seller gave you a 6-character code. Enter it to begin.</p>
+      <div class="field-group">
+        <input id="codeInput" class="field-input code" maxlength="6" placeholder="ABC123"
+               autocapitalize="characters" autocomplete="off"/>
+      </div>
+      <button id="codeNextBtn" class="btn btn-primary btn-block btn-lg">Continue →</button>
+      <p id="codeError" class="error-msg" style="text-align:left"></p>
+    </div>
+
+    <!-- Step 2: Phone verify -->
+    <div id="stepPhone" class="hidden" style="text-align:center">
+      <p class="eyebrow" style="margin-bottom:8px">Step 2 of 2</p>
+      <h1 style="font-size:1.5rem;margin-bottom:6px">Verify your number</h1>
+      <p style="color:var(--text-2);font-size:0.9rem;margin-bottom:24px">We'll send a one-time code to confirm your identity.</p>
+      <div class="field-group" style="text-align:left">
+        <label class="field-label" for="phoneInput">Your phone number</label>
+        <input id="phoneInput" class="field-input" type="tel" placeholder="0803 123 4567"/>
+      </div>
+      <button id="sendOtpBtn" class="btn btn-primary btn-block">Send Verification Code</button>
+      <p id="phoneError" class="error-msg" style="text-align:left"></p>
+      <div id="recaptcha-container"></div>
+      <button onclick="showStep('stepCode',0)" class="btn btn-glass btn-sm" style="margin-top:16px;width:100%">← Back</button>
+    </div>
+
+    <!-- Step 3: OTP -->
+    <div id="stepOtp" class="hidden" style="text-align:center">
+      <p class="eyebrow" style="margin-bottom:8px">Almost there!</p>
+      <h1 style="font-size:1.5rem;margin-bottom:6px">Enter the code</h1>
+      <p style="color:var(--text-2);font-size:0.9rem;margin-bottom:24px">Sent to <strong id="phoneDisplay"></strong></p>
+      <div class="field-group" style="text-align:left">
+        <label class="field-label" for="otpInput">6-digit code</label>
+        <input id="otpInput" class="field-input code" type="tel" maxlength="6" placeholder="000000"/>
+      </div>
+      <button id="verifyBtn" class="btn btn-lime btn-block btn-lg">Verify &amp; Start Delivery →</button>
+      <p id="otpError" class="error-msg" style="text-align:left"></p>
+      <button onclick="showStep('stepPhone',1)" class="btn btn-glass btn-sm" style="margin-top:16px;width:100%">← Use different number</button>
+    </div>
+
+  </div>
+</div>
+
+<script type="module">
+import { auth } from "./firebase-config.js";
+import { db } from "./firebase-config.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { RecaptchaVerifier, signInWithPhoneNumber } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+let confirmResult = null;
+let rcVerifier    = null;
+let riderCode     = null;
+
+window.showStep = function(id, dotIdx) {
+  ['stepCode','stepPhone','stepOtp'].forEach(s => document.getElementById(s).classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+  document.querySelectorAll('.step-dot').forEach((d, i) => {
+    d.classList.toggle('active', i === dotIdx);
+    d.classList.toggle('done', i < dotIdx);
+  });
+}
+
+function normalizePhone(input) {
+  const d = input.replace(/\D/g, '');
+  if (d.startsWith('234')) return `+${d}`;
+  if (d.startsWith('0'))   return `+234${d.slice(1)}`;
+  return `+234${d}`;
+}
+
+function err(elId, msg) {
+  const el = document.getElementById(elId);
+  el.textContent = msg; el.classList.add('visible');
+}
+function clearErr(elId) {
+  const el = document.getElementById(elId);
+  el.textContent = ''; el.classList.remove('visible');
+}
+function setLoading(btn, on, label) { btn.disabled = on; btn.textContent = on ? 'Please wait…' : label; }
+
+// Step 1: Validate code exists in Firestore
+document.getElementById('codeNextBtn').addEventListener('click', async () => {
+  const raw = document.getElementById('codeInput').value.trim().toUpperCase();
+  clearErr('codeError');
+  if (raw.length < 6) { err('codeError', 'Please enter the full 6-character code.'); return; }
+  const btn = document.getElementById('codeNextBtn');
+  setLoading(btn, true, 'Continue →');
+  try {
+    const snap = await getDoc(doc(db, 'deliveries', raw));
+    if (!snap.exists()) { err('codeError', 'Delivery code not found. Check with the seller.'); return; }
+    const data = snap.data();
+    if (data.status !== 'pending') { err('codeError', 'This code has already been accepted by a rider.'); return; }
+    riderCode = raw;
+    sessionStorage.setItem('gotracka.riderCode', raw);
+    showStep('stepPhone', 1);
+    rcVerifier = rcVerifier || new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'invisible' });
+  } catch(e) {
+    err('codeError', 'Could not verify code: ' + e.message);
+  } finally {
+    setLoading(btn, false, 'Continue →');
+  }
+});
+
+// Step 2: Send OTP
+document.getElementById('sendOtpBtn').addEventListener('click', async () => {
+  clearErr('phoneError');
+  const phone = normalizePhone(document.getElementById('phoneInput').value);
+  const btn   = document.getElementById('sendOtpBtn');
+  if (!document.getElementById('phoneInput').value.trim()) { err('phoneError', 'Please enter your phone number.'); return; }
+  setLoading(btn, true, 'Send Verification Code');
+  try {
+    confirmResult = await signInWithPhoneNumber(auth, phone, rcVerifier);
+    document.getElementById('phoneDisplay').textContent = phone;
+    showStep('stepOtp', 2);
+    document.getElementById('otpInput').focus();
+  } catch(e) {
+    err('phoneError', 'Could not send code: ' + e.message);
+  } finally {
+    setLoading(btn, false, 'Send Verification Code');
+  }
+});
+
+// Step 3: Verify OTP → go to dashboard
+document.getElementById('verifyBtn').addEventListener('click', async () => {
+  clearErr('otpError');
+  const otp = document.getElementById('otpInput').value.trim();
+  const btn = document.getElementById('verifyBtn');
+  if (otp.length < 6) { err('otpError', 'Enter the 6-digit code sent to your phone.'); return; }
+  setLoading(btn, true, 'Verify & Start Delivery →');
+  try {
+    const cred = await confirmResult.confirm(otp);
+    sessionStorage.setItem('gotracka.riderId',    cred.user.uid);
+    sessionStorage.setItem('gotracka.riderPhone', cred.user.phoneNumber);
+    window.location.href = 'dashboard.html';
+  } catch(e) {
+    err('otpError', 'That code didn\'t match. Please try again.');
+  } finally {
+    setLoading(btn, false, 'Verify & Start Delivery →');
+  }
+});
+</script>
+</body>
+</html>
